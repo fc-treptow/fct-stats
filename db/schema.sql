@@ -182,30 +182,59 @@ $do$;
 -- ------------------------------------------------------------------ views
 -- security_invoker: views respect the RLS of the querying user.
 
-drop view if exists v_player_totals, v_cross_team, v_scorers, v_card_watch, v_red_cards, v_squad,
+drop view if exists v_player_totals, v_cross_team, v_player_identity, v_scorers, v_card_watch, v_red_cards, v_squad,
     v_yellow_status, v_player_season, v_name_to_player, v_seasons cascade;
 
 create view v_seasons with (security_invoker = true) as
 select season, count(distinct match_id) as matches
 from matches group by season order by season desc;
 
--- Resolve names (cards / goals) to pass numbers via appearances in the same season and team.
+-- One person = same first and last name. DFBnet pass numbers can change over the years;
+-- the most recently used pass number becomes the person's id ("pass_nr" in all views below).
+create view v_player_identity with (security_invoker = true) as
+with last_seen as (
+    select a.pass_nr, max(m.kickoff_date) as last_seen
+    from appearances a join matches m using (match_id)
+    group by a.pass_nr
+)
+select p.pass_nr,
+       first_value(p.pass_nr) over (
+           partition by lower(btrim(p.first_name)), lower(btrim(p.last_name))
+           order by l.last_seen desc nulls last, p.pass_nr desc) as person_id
+from players p
+left join last_seen l using (pass_nr);
+
+-- Resolve names (cards / goals) to persons via appearances in the same season and team.
 create view v_name_to_player with (security_invoker = true) as
-select distinct m.season, m.club_team as team, lower(p.last_name) as last_name, lower(p.first_name) as first_name, p.pass_nr
+select distinct m.season, m.club_team as team, lower(btrim(p.last_name)) as last_name,
+       lower(btrim(p.first_name)) as first_name, i.person_id as pass_nr
 from appearances a
 join matches m using (match_id)
 join players p using (pass_nr)
+join v_player_identity i using (pass_nr)
 union
-select c.season, al.team, lower(al.last_name), lower(al.first_name), al.pass_nr
+select c.season, al.team, lower(al.last_name), lower(al.first_name), coalesce(i.person_id, al.pass_nr)
 from player_aliases al
-join competitions c on c.team_name = al.team;
+join competitions c on c.team_name = al.team
+left join v_player_identity i on i.pass_nr = al.pass_nr;
 
 create view v_player_season with (security_invoker = true) as
+with per_match as (   -- one row per person and match, even if two pass numbers were used
+    select i.person_id, a.match_id,
+           bool_or(a.in_squad)  as in_squad,
+           bool_or(a.played)    as played,
+           min(a.minute_on)     as minute_on,
+           max(a.minute_off)    as minute_off,
+           max(a.minutes_real)  as minutes_real
+    from appearances a
+    join v_player_identity i using (pass_nr)
+    group by i.person_id, a.match_id
+)
 select
     m.season,
     m.club_team,
     team_group(m.club_team)                                                  as team_group,
-    a.pass_nr,
+    a.person_id                                                              as pass_nr,
     p.last_name,
     p.first_name,
     count(*) filter (where a.in_squad)                                       as squad,
@@ -216,10 +245,10 @@ select
     coalesce(sum(a.minutes_real) filter (where a.played), 0)                 as minutes,
     count(distinct m.match_id)                                               as team_matches,
     coalesce(sum(coalesce(m.match_length, 90)), 0)                           as possible_minutes
-from appearances a
+from per_match a
 join matches m using (match_id)
-join players p using (pass_nr)
-group by m.season, m.club_team, a.pass_nr, p.last_name, p.first_name;
+join players p on p.pass_nr = a.person_id
+group by m.season, m.club_team, a.person_id, p.last_name, p.first_name;
 
 -- Yellow card status per competition. DFBnet bans after every 5th yellow card.
 create view v_yellow_status with (security_invoker = true) as
@@ -320,7 +349,9 @@ select pass_nr, last_name, first_name,
        sum(goals_all)                         as goals,
        sum(yellow)                            as yellow,
        sum(red) + sum(yellow_red)             as red,
-       string_agg(distinct team_group, ',' order by team_group) as team_groups
+       string_agg(distinct team_group, ',' order by team_group) as team_groups,
+       (select string_agg(i.pass_nr, ', ' order by i.pass_nr) from v_player_identity i
+         where i.person_id = v_squad.pass_nr)  as pass_numbers
 from v_squad
 group by pass_nr, last_name, first_name;
 

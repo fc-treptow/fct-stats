@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import DataTable, { type Column } from "@/components/DataTable";
 import { COMPETITION_TYPES, fetchAll, fmtDate, fullName, seasonSortKey, teamLabel } from "@/lib/data";
 
@@ -19,12 +19,19 @@ const SEASON_COLUMNS: Column[] = [
 
 export default async function PlayerPage({ params }: { params: Promise<{ pass: string }> }) {
   const pass = decodeURIComponent((await params).pass);
-  const [seasons, yellow, red] = await Promise.all([
+  const [seasons, yellow, red, totals] = await Promise.all([
     fetchAll((sb) => sb.from("v_squad").select("*").eq("pass_nr", pass)),
     fetchAll((sb) => sb.from("v_yellow_status").select("*").eq("pass_nr", pass)),
     fetchAll((sb) => sb.from("v_red_cards").select("*").eq("pass_nr", pass)),
+    fetchAll((sb) => sb.from("v_player_totals").select("pass_numbers").eq("pass_nr", pass)),
   ]);
-  if (seasons.length === 0) notFound();
+  if (seasons.length === 0) {
+    // An older pass number of a player: go to the merged profile.
+    const ids = await fetchAll((sb) => sb.from("v_player_identity").select("person_id").eq("pass_nr", pass));
+    if (ids[0] && ids[0].person_id !== pass) redirect(`/players/${encodeURIComponent(ids[0].person_id)}`);
+    notFound();
+  }
+  const passNumbers: string = totals[0]?.pass_numbers ?? pass;
 
 
   const p = seasons[0];
@@ -43,7 +50,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ pass: s
         <div>
           <h1>{fullName(p)}</h1>
           <div className="muted small">
-            Passnummer {pass} · Saisons {rows[rows.length - 1].season} – {rows[0].season}
+            {passNumbers.includes(",") ? "Passnummern" : "Passnummer"} {passNumbers} · Saisons {rows[rows.length - 1].season} – {rows[0].season}
           </div>
         </div>
       </div>
