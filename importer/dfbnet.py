@@ -71,7 +71,13 @@ def login(username: str, password: str, debug_dir: Path | None = None) -> reques
                 page.fill("input[name=username]", username)
                 page.fill("input[name=password]", password)
                 page.locator("#kc-login, button[type=submit], input[type=submit]").first.click()
-                page.wait_for_load_state("networkidle")
+                # DFBnet pages keep loading ads/trackers, so "networkidle" never happens:
+                # wait until we have left the SSO login page instead.
+                try:
+                    page.wait_for_url(lambda u: "auth.dfbnet.org" not in u, timeout=45_000)
+                    page.wait_for_load_state("domcontentloaded")
+                except Exception:
+                    pass
                 if _has_login_form(page):
                     raise LoginError("Login rejected (still on the login form) - check DFBNET_USERNAME / DFBNET_PASSWORD")
             page.goto(STATS_URL, wait_until="domcontentloaded")
