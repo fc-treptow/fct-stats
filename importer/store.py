@@ -67,6 +67,8 @@ def load_folder(conn: psycopg.Connection, out_dir: Path, club_pattern: str) -> d
                 stats["red"] += len(rows)
             elif report == REPORT_GOALS:
                 rows = parsers.parse_goals(text)
+                if e["competition_type"] != "1":  # friendlies/cups: league-wide lists are huge, keep ours only
+                    rows = [g for g in rows if ours.search(g.team)]
                 conn.execute("delete from goal_tallies where fixture_list_id=%s", (fl,))
                 for g in rows:
                     conn.execute(
