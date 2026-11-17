@@ -7,8 +7,20 @@ export const TEAMS = [
   { key: "7er", label: "7er" },
 ] as const;
 
+const OTHER_TEAM_LABELS: Record<string, string> = { ue: "Ü32/Altliga" };
+
 export function teamLabel(key: string) {
-  return TEAMS.find((t) => t.key === key)?.label ?? key;
+  return TEAMS.find((t) => t.key === key)?.label ?? OTHER_TEAM_LABELS[key] ?? key;
+}
+
+export const COMP_FILTERS = [
+  { key: "league", label: "Nur Liga", categories: ["league"] },
+  { key: "competitive", label: "Liga + Pokal", categories: ["league", "cup"] },
+  { key: "all", label: "Alle inkl. Freundschaftsspiele", categories: ["league", "cup", "friendly"] },
+] as const;
+
+export function pickCompFilter(requested?: string) {
+  return COMP_FILTERS.find((f) => f.key === requested) ?? COMP_FILTERS[1];
 }
 
 export const COMPETITION_TYPES: Record<string, string> = {
