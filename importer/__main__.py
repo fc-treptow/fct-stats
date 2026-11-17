@@ -3,6 +3,7 @@
     python -m importer fetch --mode current|full --out out     # DFBnet -> CSV files + manifest.json
     python -m importer load  --out out                          # CSV files -> database
     python -m importer run   --mode current|full --out out     # both (load only if DATABASE_URL is set)
+    python -m importer reprocess                                # rebuild tables from stored raw exports
 
 Environment: DFBNET_USERNAME, DFBNET_PASSWORD, DATABASE_URL (optional), CLUB_PATTERN (default "FC Treptow").
 """
@@ -98,6 +99,20 @@ def check(out: Path) -> dict:
     return summary
 
 
+def reprocess() -> dict:
+    import psycopg
+    from . import store
+
+    with psycopg.connect(os.environ["DATABASE_URL"], autocommit=True) as conn:
+        store.migrate(conn)
+        run_id = conn.execute("insert into import_runs (mode) values ('reprocess') returning id").fetchone()[0]
+        stats = store.reprocess(conn, os.environ.get("CLUB_PATTERN", "FC Treptow"))
+        conn.execute("update import_runs set finished_at=now(), status='ok', details=%s where id=%s",
+                     (json.dumps(stats), run_id))
+    log.info("Reprocessed: %s", stats)
+    return stats
+
+
 def load(out: Path, mode: str) -> dict:
     import psycopg
     from . import store
@@ -124,12 +139,16 @@ def load(out: Path, mode: str) -> dict:
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     ap = argparse.ArgumentParser(prog="importer")
-    ap.add_argument("command", choices=["fetch", "load", "run"])
+    ap.add_argument("command", choices=["fetch", "load", "run", "reprocess"])
     ap.add_argument("--mode", choices=["current", "full"], default="current")
     ap.add_argument("--seasons", help="comma separated, e.g. 26/27,25/26 (overrides --mode)")
     ap.add_argument("--out", type=Path, default=Path("out"))
     a = ap.parse_args()
     seasons = a.seasons.split(",") if a.seasons else None
+
+    if a.command == "reprocess":
+        reprocess()
+        return
 
     manifest = None
     if a.command in ("fetch", "run"):

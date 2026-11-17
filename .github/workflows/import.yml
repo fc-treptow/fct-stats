@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "current = this season only, full = all seasons"
+        description: "current = this season only, full = all seasons, reprocess = rebuild from stored exports (no DFBnet)"
         type: choice
-        options: [current, full]
+        options: [current, full, reprocess]
         default: current
       seasons:
         description: "Optional: comma separated seasons, e.g. 26/27,25/26 (overrides mode)"
@@ -42,6 +42,8 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           CLUB_PATTERN: "FC Treptow"
         run: |
-          ARGS="--mode ${{ inputs.mode || 'current' }} --out out"
+          MODE="${{ inputs.mode || 'current' }}"
+          if [ "$MODE" = "reprocess" ]; then python -m importer reprocess; exit 0; fi
+          ARGS="--mode $MODE --out out"
           if [ -n "${{ inputs.seasons }}" ]; then ARGS="$ARGS --seasons ${{ inputs.seasons }}"; fi
           python -m importer run $ARGS
