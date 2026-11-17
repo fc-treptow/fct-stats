@@ -23,7 +23,7 @@ Views for the app: `v_player_season`, `v_yellow_status`, `v_name_to_player`.
 ## Running
 
 GitHub Action **DFBnet import** (`.github/workflows/import.yml`):
-- nightly: current season
+- weekly, Monday night: current season
 - manual ("Run workflow"): `current`, `full` (all seasons) or a list of seasons
 
 Repository secrets:
