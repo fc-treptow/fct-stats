@@ -82,7 +82,7 @@ def login(username: str, password: str, debug_dir: Path | None = None) -> reques
                     raise LoginError("Login rejected (still on the login form) - check DFBNET_USERNAME / DFBNET_PASSWORD")
             page.goto(STATS_URL, wait_until="domcontentloaded")
             if "Statistiken suchen" not in page.content():
-                raise LoginError(f"Logged in, but the statistics page did not open (now at {page.url})")
+                raise LoginError("Logged in, but the statistics page did not open (permissions changed?)")
             cookies = ctx.cookies()
         except Exception:
             if debug_dir:
@@ -136,8 +136,9 @@ def parse_flow_page(html: str, url: str):
     soup = BeautifulSoup(html, "html.parser")
     form = soup.find("form")
     if form is None or not form.get("action"):
-        text = " ".join(soup.get_text(" ").split())[:200]
-        raise FlowError(f"No form on page: {text}")
+        title = soup.title.get_text(strip=True) if soup.title else ""
+        # No page text in the message: logs are public and DFBnet pages show the user's name.
+        raise FlowError(f"Unexpected DFBnet page without form ({title or 'no title'}) - session expired or page changed")
     action = urljoin(url, form["action"])
     fields: dict[str, str] = {}
     for inp in form.find_all("input"):

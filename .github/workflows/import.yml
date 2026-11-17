@@ -20,6 +20,8 @@ concurrency:
   group: dfbnet-import
   cancel-in-progress: false
 
+# The repository is public: run logs are visible to everyone. The importer logs only
+# counts and competition names, never player data, and the exports are not uploaded.
 jobs:
   import:
     runs-on: ubuntu-latest
@@ -43,11 +45,3 @@ jobs:
           ARGS="--mode ${{ inputs.mode || 'current' }} --out out"
           if [ -n "${{ inputs.seasons }}" ]; then ARGS="$ARGS --seasons ${{ inputs.seasons }}"; fi
           python -m importer run $ARGS
-      - name: Keep exports (3 days, private)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dfbnet-exports
-          path: out/
-          retention-days: 3
-          if-no-files-found: ignore
