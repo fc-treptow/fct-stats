@@ -42,3 +42,19 @@ export DFBNET_USERNAME=... DFBNET_PASSWORD=... DATABASE_URL=...
 python -m importer run --mode current      # or: fetch / load, --mode full, --seasons 26/27,25/26
 python -m pytest -q
 ```
+
+## Web app (`web/`)
+
+Next.js app on Vercel (project root directory: `web`). Login with Google, only
+`@fc-treptow.de` accounts (Google OAuth app type "Internal" + check in the app +
+database trigger on sign-up + row-level security on all tables).
+
+Screens: team overview with card warning (`/team/1`, `/team/2`, `/team/3`, `/team/7er`),
+scorers (`/scorers`), players and profiles (`/players`), cross-team use (`/cross-team`),
+import status and "Update now" for admins (`/admin`).
+
+Environment variables (see `web/.env.example`): `NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `ADMIN_EMAILS`, `GITHUB_DISPATCH_TOKEN`.
+
+The database schema (tables, views, security) lives in `db/schema.sql` and is applied
+by every import run.
