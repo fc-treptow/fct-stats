@@ -26,8 +26,10 @@ export default async function PlayerPage({ params }: { params: Promise<{ pass: s
   ]);
   if (seasons.length === 0) notFound();
 
+
   const p = seasons[0];
-  const rows = seasons
+  const active = seasons.filter((r) => r.squad > 0 || r.appearances > 0 || r.goals_all > 0 || r.yellow > 0);
+  const rows = (active.length ? active : seasons)
     .map((r: any) => ({ ...r, team: `${teamLabel(r.team_group)} (${r.club_team})`, sortKey: seasonSortKey(r.season) }) as any)
     .sort((a, b) => b.sortKey - a.sortKey);
   const sum = (k: string) => seasons.reduce((s, r) => s + Number(r[k] ?? 0), 0);
