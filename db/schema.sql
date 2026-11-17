@@ -193,6 +193,29 @@ language sql immutable as $$
     end
 $$;
 
+-- Team key of a match: old-boys matches (Ü32/Ü40/Altliga) are recorded under the 1st team's
+-- name in DFBnet and get their own key.
+create or replace function match_team_group(club_team text, competition text) returns text
+language sql immutable as $$
+    select case when competition ~* '(Ü ?[0-9]{2}|altliga)' then 'ue' else team_group(club_team) end
+$$;
+
+-- league / cup / friendly, from the DFBnet competition label of a match
+create or replace function match_category(competition text) returns text
+language sql immutable as $$
+    select case
+        when competition ~* 'pokal' then 'cup'
+        when competition ~* '(FS/|-FS|freundschaft|turnier|halle)' then 'friendly'
+        else 'league'
+    end
+$$;
+
+-- same for a competition type of the DFBnet catalog (1 Meisterschaft, 308 Pokal, others friendly)
+create or replace function competition_category(competition_type text) returns text
+language sql immutable as $$
+    select case competition_type when '1' then 'league' when '308' then 'cup' else 'friendly' end
+$$;
+
 -- ------------------------------------------------------------------ security (Supabase)
 -- Only @fc-treptow.de accounts may sign up, and only they can read the data.
 -- The importer connects as the database owner and is not affected by RLS.
@@ -246,7 +269,7 @@ $do$;
 -- ------------------------------------------------------------------ views
 -- security_invoker: views respect the RLS of the querying user.
 
-drop view if exists v_player_totals, v_cross_team, v_player_identity, v_scorers, v_card_watch, v_red_cards, v_squad,
+drop view if exists v_player_totals, v_cross_team, v_player_identity, v_player_season_cat, v_team_matches, v_goals_cat, v_scorers, v_card_watch, v_red_cards, v_squad,
     v_yellow_status, v_player_season, v_name_to_player, v_seasons cascade;
 
 create view v_seasons with (security_invoker = true) as
@@ -260,11 +283,13 @@ select pass_nr, coalesce(person_id, pass_nr) as person_id from players;
 create view v_name_to_player with (security_invoker = true) as
 select season, team, last_name, first_name, pass_nr from name_index;
 
-create view v_player_season with (security_invoker = true) as
+-- Per person, season, team and category (league / cup / friendly).
+create view v_player_season_cat with (security_invoker = true) as
 select
     m.season,
     m.club_team,
-    team_group(m.club_team)                                                  as team_group,
+    match_team_group(m.club_team, m.competition)                             as team_group,
+    match_category(m.competition)                                            as category,
     a.person_id                                                              as pass_nr,
     p.last_name,
     p.first_name,
@@ -273,13 +298,49 @@ select
     count(*) filter (where a.played and a.minute_on <= 1)                    as starts,
     count(*) filter (where a.played and a.minute_on > 1)                     as subbed_on,
     count(*) filter (where a.played and a.minute_off < coalesce(m.match_length, 90)) as subbed_off,
-    coalesce(sum(a.minutes_real) filter (where a.played), 0)                 as minutes,
-    count(distinct m.match_id)                                               as team_matches,
-    coalesce(sum(coalesce(m.match_length, 90)), 0)                           as possible_minutes
+    coalesce(sum(a.minutes_real) filter (where a.played), 0)                 as minutes
 from person_matches a
 join matches m using (match_id)
 join players p on p.pass_nr = a.person_id
-group by m.season, m.club_team, a.person_id, p.last_name, p.first_name;
+group by 1, 2, 3, 4, a.person_id, p.last_name, p.first_name;
+
+-- All matches of a team per season and category (base for "% of possible minutes").
+create view v_team_matches with (security_invoker = true) as
+select season, club_team, match_team_group(club_team, competition) as team_group,
+       match_category(competition) as category,
+       count(*) as matches,
+       sum(coalesce(match_length, 90)) as possible_minutes
+from matches
+group by 1, 2, 3, 4;
+
+-- Per person, season and team, all competitions. minutes_pct: league + cup minutes
+-- against all league + cup minutes of the team.
+create view v_player_season with (security_invoker = true) as
+select
+    c.season, c.club_team, c.team_group, c.pass_nr, c.last_name, c.first_name,
+    sum(c.squad)        as squad,
+    sum(c.appearances)  as appearances,
+    sum(c.starts)       as starts,
+    sum(c.subbed_on)    as subbed_on,
+    sum(c.subbed_off)   as subbed_off,
+    sum(c.minutes)      as minutes,
+    sum(c.minutes) filter (where c.category in ('league', 'cup')) as minutes_comp,
+    (select sum(t.possible_minutes) from v_team_matches t
+      where t.season = c.season and t.club_team = c.club_team and t.team_group = c.team_group
+        and t.category in ('league', 'cup')) as possible_minutes
+from v_player_season_cat c
+group by c.season, c.club_team, c.team_group, c.pass_nr, c.last_name, c.first_name;
+
+-- Goals per person, season, team and category (scorer exports).
+create view v_goals_cat with (security_invoker = true) as
+select g.season, g.team, team_group(g.team) as team_group, n.pass_nr,
+       competition_category(c.competition_type) as category, sum(g.goals) as goals
+from goal_tallies g
+join competitions c using (fixture_list_id)
+join v_name_to_player n
+  on n.season = g.season and n.team = g.team
+ and n.last_name = lower(g.last_name) and n.first_name = lower(g.first_name)
+group by 1, 2, 3, 4, 5;
 
 -- Yellow card status per competition. DFBnet bans after every 5th yellow card.
 create view v_yellow_status with (security_invoker = true) as
@@ -298,7 +359,8 @@ left join v_name_to_player n
  and n.last_name = lower(y.last_name) and n.first_name = lower(y.first_name);
 
 create view v_red_cards with (security_invoker = true) as
-select r.season, r.fixture_list_id, r.competition, c.competition_type, r.matchday, r.team,
+select r.season, r.fixture_list_id, r.competition, c.competition_type,
+       competition_category(c.competition_type) as category, r.matchday, r.team,
        team_group(r.team) as team_group, r.kind, r.last_name, r.first_name, n.pass_nr
 from red_cards r
 left join competitions c using (fixture_list_id)
@@ -331,7 +393,7 @@ with goals as (
     from v_red_cards where pass_nr is not null group by season, team, pass_nr
 )
 select ps.*,
-       case when ps.possible_minutes > 0 then round(100.0 * ps.minutes / ps.possible_minutes) end as minutes_pct,
+       case when ps.possible_minutes > 0 then round(100.0 * coalesce(ps.minutes_comp, 0) / ps.possible_minutes) end as minutes_pct,
        coalesce(g.goals_league, 0) as goals_league,
        coalesce(g.goals_all, 0)    as goals_all,
        coalesce(y.yellow, 0)       as yellow,
@@ -340,9 +402,9 @@ select ps.*,
        coalesce(r.yellow_red, 0)   as yellow_red,
        coalesce(r.red, 0)          as red
 from v_player_season ps
-left join goals  g on g.season = ps.season and g.team = ps.club_team and g.pass_nr = ps.pass_nr
-left join yellow y on y.season = ps.season and y.team = ps.club_team and y.pass_nr = ps.pass_nr
-left join red    r on r.season = ps.season and r.team = ps.club_team and r.pass_nr = ps.pass_nr;
+left join goals  g on g.season = ps.season and g.team = ps.club_team and g.pass_nr = ps.pass_nr and ps.team_group <> 'ue'
+left join yellow y on y.season = ps.season and y.team = ps.club_team and y.pass_nr = ps.pass_nr and ps.team_group <> 'ue'
+left join red    r on r.season = ps.season and r.team = ps.club_team and r.pass_nr = ps.pass_nr and ps.team_group <> 'ue';
 
 -- Scorer rankings per competition (league competitions contain all clubs).
 create view v_scorers with (security_invoker = true) as
@@ -366,6 +428,7 @@ select season, pass_nr, last_name, first_name,
        sum(appearances)                                   as apps_total,
        count(*) filter (where appearances > 0)            as teams_used
 from v_player_season
+where team_group <> 'ue'
 group by season, pass_nr, last_name, first_name
 having count(*) filter (where appearances > 0) > 1;
 
