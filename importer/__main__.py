@@ -71,6 +71,33 @@ def fetch(mode: str, out: Path, seasons: list[str] | None = None) -> dict:
     return manifest
 
 
+def check(out: Path) -> dict:
+    """Parse every fetched file and log row counts (no personal data) - catches format changes early."""
+    from . import parsers
+    fn = {dfbnet.REPORT_APPEARANCES: parsers.parse_appearances, dfbnet.REPORT_YELLOW: parsers.parse_yellow,
+          dfbnet.REPORT_RED: parsers.parse_red, dfbnet.REPORT_GOALS: parsers.parse_goals}
+    manifest = json.loads((out / "manifest.json").read_text())
+    summary, problems = {}, []
+    for f in manifest["files"]:
+        try:
+            rows = fn[f["report"]]((out / f["path"]).read_text(encoding="utf-8"))
+        except Exception as exc:
+            problems.append(f"{f['path']}: {exc}")
+            continue
+        key = f"{f['entry']['season']} | {f['entry']['team_name']} | {f['entry']['fixture_list_name']}"
+        summary.setdefault(key, {})[f["report"]] = len(rows)
+        if f["report"] == dfbnet.REPORT_APPEARANCES:
+            summary[key]["played"] = sum(r.played for r in rows)
+            summary[key]["matches"] = len({r.match_id for r in rows})
+    for k, v in summary.items():
+        log.info("check %s: %s", k, v)
+    for p in problems:
+        log.error("parse problem %s", p)
+    if problems:
+        sys.exit(f"{len(problems)} files could not be parsed")
+    return summary
+
+
 def load(out: Path, mode: str) -> dict:
     import psycopg
     from . import store
@@ -107,6 +134,8 @@ def main():
     manifest = None
     if a.command in ("fetch", "run"):
         manifest = fetch(a.mode, a.out, seasons)
+    if a.command in ("fetch", "run"):
+        check(a.out)
     if a.command == "load" or (a.command == "run" and os.environ.get("DATABASE_URL")):
         load(a.out, a.mode)
     elif a.command == "run":
