@@ -32,7 +32,7 @@ Repository secrets:
 |---|---|
 | `DFBNET_USERNAME` | DFBnet login |
 | `DFBNET_PASSWORD` | DFBnet password (expires regularly in DFBnet — update it here too) |
-| `DATABASE_URL` | Postgres connection string (Supabase). Optional: without it the run only fetches and uploads the exports as a 3-day artifact. |
+| `DATABASE_URL` | Postgres connection string (Supabase). Optional: without it the run only fetches and checks the exports. |
 
 Locally:
 
@@ -58,3 +58,9 @@ Environment variables (see `web/.env.example`): `NEXT_PUBLIC_SUPABASE_URL`,
 
 The database schema (tables, views, security) lives in `db/schema.sql` and is applied
 by every import run.
+
+## Public repository
+
+This repository is public. No credentials or player data belong in it: credentials live in
+GitHub/Vercel secrets, data only in Supabase (readable only for @fc-treptow.de accounts).
+Workflow logs print counts only, and exports are not uploaded as artifacts.
