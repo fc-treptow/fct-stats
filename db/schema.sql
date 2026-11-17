@@ -116,6 +116,69 @@ create table if not exists player_aliases (
     primary key (team, last_name, first_name)
 );
 
+-- ------------------------------------------------------------------ derived tables
+-- Rebuilt by rebuild_derived() at the end of every import (keeps the app's views fast).
+
+alter table players add column if not exists person_id text;   -- same name = same person (see rebuild_derived)
+create index if not exists players_person_idx on players(person_id);
+
+create table if not exists person_matches (     -- one row per person and match (pass numbers merged)
+    person_id     text not null,
+    match_id      text not null,
+    in_squad      boolean not null,
+    played        boolean not null,
+    minute_on     int,
+    minute_off    int,
+    minutes_real  int,
+    primary key (person_id, match_id)
+);
+create index if not exists person_matches_match_idx on person_matches(match_id);
+
+create table if not exists name_index (         -- names in card/goal exports -> person
+    season      text not null,
+    team        text not null,
+    last_name   text not null,
+    first_name  text not null,
+    pass_nr     text not null
+);
+create index if not exists name_index_idx on name_index(season, team, last_name, first_name);
+
+create or replace function rebuild_derived() returns void
+language plpgsql as $$
+begin
+    -- A person = same first + last name; the most recently used pass number is the id.
+    with last_seen as (
+        select a.pass_nr, max(m.kickoff_date) as last_seen
+        from appearances a join matches m using (match_id) group by a.pass_nr
+    ), ranked as (
+        select p.pass_nr,
+               first_value(p.pass_nr) over (
+                   partition by lower(btrim(p.first_name)), lower(btrim(p.last_name))
+                   order by l.last_seen desc nulls last, p.pass_nr desc) as pid
+        from players p left join last_seen l using (pass_nr)
+    )
+    update players p set person_id = r.pid
+    from ranked r where r.pass_nr = p.pass_nr and p.person_id is distinct from r.pid;
+
+    truncate person_matches;
+    insert into person_matches
+    select p.person_id, a.match_id, bool_or(a.in_squad), bool_or(a.played),
+           min(a.minute_on), max(a.minute_off), max(a.minutes_real)
+    from appearances a join players p using (pass_nr)
+    group by p.person_id, a.match_id;
+
+    truncate name_index;
+    insert into name_index
+    select distinct m.season, m.club_team, lower(btrim(p.last_name)), lower(btrim(p.first_name)), p.person_id
+    from appearances a join matches m using (match_id) join players p using (pass_nr)
+    union
+    select c.season, al.team, lower(al.last_name), lower(al.first_name), coalesce(p.person_id, al.pass_nr)
+    from player_aliases al
+    join competitions c on c.team_name = al.team
+    left join players p on p.pass_nr = al.pass_nr;
+end
+$$;
+
 -- ------------------------------------------------------------------ helpers
 
 -- Stable team key across seasons: DFBnet team names change over the years
@@ -170,10 +233,11 @@ do $do$
 declare t text;
 begin
     foreach t in array array['competitions','players','matches','appearances','yellow_tallies',
-                             'red_cards','goal_tallies','import_runs','player_aliases'] loop
+                             'red_cards','goal_tallies','import_runs','player_aliases',
+                             'person_matches','name_index'] loop
         execute format('alter table %I enable row level security', t);
         execute format('drop policy if exists club_read on %I', t);
-        execute format('create policy club_read on %I for select using (public.is_club_member())', t);
+        execute format('create policy club_read on %I for select using ((select public.is_club_member()))', t);
     end loop;
     alter table raw_exports enable row level security;  -- no policy: not readable through the API
 end
@@ -189,47 +253,14 @@ create view v_seasons with (security_invoker = true) as
 select season, count(distinct match_id) as matches
 from matches group by season order by season desc;
 
--- One person = same first and last name. DFBnet pass numbers can change over the years;
--- the most recently used pass number becomes the person's id ("pass_nr" in all views below).
+-- Person ids are computed during the import (rebuild_derived): same name = same person.
 create view v_player_identity with (security_invoker = true) as
-with last_seen as (
-    select a.pass_nr, max(m.kickoff_date) as last_seen
-    from appearances a join matches m using (match_id)
-    group by a.pass_nr
-)
-select p.pass_nr,
-       first_value(p.pass_nr) over (
-           partition by lower(btrim(p.first_name)), lower(btrim(p.last_name))
-           order by l.last_seen desc nulls last, p.pass_nr desc) as person_id
-from players p
-left join last_seen l using (pass_nr);
+select pass_nr, coalesce(person_id, pass_nr) as person_id from players;
 
--- Resolve names (cards / goals) to persons via appearances in the same season and team.
 create view v_name_to_player with (security_invoker = true) as
-select distinct m.season, m.club_team as team, lower(btrim(p.last_name)) as last_name,
-       lower(btrim(p.first_name)) as first_name, i.person_id as pass_nr
-from appearances a
-join matches m using (match_id)
-join players p using (pass_nr)
-join v_player_identity i using (pass_nr)
-union
-select c.season, al.team, lower(al.last_name), lower(al.first_name), coalesce(i.person_id, al.pass_nr)
-from player_aliases al
-join competitions c on c.team_name = al.team
-left join v_player_identity i on i.pass_nr = al.pass_nr;
+select season, team, last_name, first_name, pass_nr from name_index;
 
 create view v_player_season with (security_invoker = true) as
-with per_match as (   -- one row per person and match, even if two pass numbers were used
-    select i.person_id, a.match_id,
-           bool_or(a.in_squad)  as in_squad,
-           bool_or(a.played)    as played,
-           min(a.minute_on)     as minute_on,
-           max(a.minute_off)    as minute_off,
-           max(a.minutes_real)  as minutes_real
-    from appearances a
-    join v_player_identity i using (pass_nr)
-    group by i.person_id, a.match_id
-)
 select
     m.season,
     m.club_team,
@@ -245,7 +276,7 @@ select
     coalesce(sum(a.minutes_real) filter (where a.played), 0)                 as minutes,
     count(distinct m.match_id)                                               as team_matches,
     coalesce(sum(coalesce(m.match_length, 90)), 0)                           as possible_minutes
-from per_match a
+from person_matches a
 join matches m using (match_id)
 join players p on p.pass_nr = a.person_id
 group by m.season, m.club_team, a.person_id, p.last_name, p.first_name;
@@ -350,8 +381,8 @@ select pass_nr, last_name, first_name,
        sum(yellow)                            as yellow,
        sum(red) + sum(yellow_red)             as red,
        string_agg(distinct team_group, ',' order by team_group) as team_groups,
-       (select string_agg(i.pass_nr, ', ' order by i.pass_nr) from v_player_identity i
-         where i.person_id = v_squad.pass_nr)  as pass_numbers
+       (select string_agg(pl.pass_nr, ', ' order by pl.pass_nr) from players pl
+         where pl.person_id = v_squad.pass_nr)  as pass_numbers
 from v_squad
 group by pass_nr, last_name, first_name;
 

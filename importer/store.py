@@ -119,6 +119,7 @@ def load_items(conn: psycopg.Connection, catalog: list[dict], items: list[dict],
         cur.execute("""delete from appearances a using matches m
                        where a.match_id = m.match_id and m.club_team !~* %s""", (club_pattern,))
         cur.execute("delete from matches where club_team !~* %s", (club_pattern,))
+        cur.execute("select rebuild_derived()")
     return stats
 
 
