@@ -1,0 +1,29 @@
+name: Apply database schema
+
+# The web app on main and the database views must match. Vercel deploys main on
+# every merge, so apply db/schema.sql to Supabase at the same moment.
+on:
+  push:
+    branches: [main]
+    paths: ["db/schema.sql", "importer/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: dfbnet-import
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Apply schema
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m importer migrate
