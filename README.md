@@ -56,8 +56,9 @@ import status and "Update now" for admins (`/admin`).
 Environment variables (see `web/.env.example`): `NEXT_PUBLIC_SUPABASE_URL`,
 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `ADMIN_EMAILS`, `GITHUB_DISPATCH_TOKEN`.
 
-The database schema (tables, views, security) lives in `db/schema.sql` and is applied
-by every import run.
+The database schema (tables, views, security) lives in `db/schema.sql`. It is applied
+automatically on every merge to `main` (workflow "Apply database schema") and by every import run.
+Imports and schema runs share one queue, so they never overlap.
 
 ## Public repository
 

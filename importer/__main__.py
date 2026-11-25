@@ -4,6 +4,7 @@
     python -m importer load  --out out                          # CSV files -> database
     python -m importer run   --mode current|full --out out     # both (load only if DATABASE_URL is set)
     python -m importer reprocess                                # rebuild tables from stored raw exports
+    python -m importer migrate                                  # apply db/schema.sql only
 
 Environment: DFBNET_USERNAME, DFBNET_PASSWORD, DATABASE_URL (optional), CLUB_PATTERN (default "FC Treptow").
 """
@@ -139,7 +140,7 @@ def load(out: Path, mode: str) -> dict:
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     ap = argparse.ArgumentParser(prog="importer")
-    ap.add_argument("command", choices=["fetch", "load", "run", "reprocess"])
+    ap.add_argument("command", choices=["fetch", "load", "run", "reprocess", "migrate"])
     ap.add_argument("--mode", choices=["current", "full"], default="current")
     ap.add_argument("--seasons", help="comma separated, e.g. 26/27,25/26 (overrides --mode)")
     ap.add_argument("--out", type=Path, default=Path("out"))
@@ -148,6 +149,14 @@ def main():
 
     if a.command == "reprocess":
         reprocess()
+        return
+    if a.command == "migrate":
+        import psycopg
+        from . import store
+        with psycopg.connect(os.environ["DATABASE_URL"], autocommit=True) as conn:
+            store.migrate(conn)
+            conn.execute("select rebuild_derived()")
+        log.info("Schema applied")
         return
 
     manifest = None
