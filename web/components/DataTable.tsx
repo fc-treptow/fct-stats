@@ -20,6 +20,7 @@ export default function DataTable({
   search = false,
   rowClass,
   empty = "Keine Daten.",
+  initialQuery = "",
 }: {
   columns: Column[];
   rows: Row[];
@@ -28,9 +29,11 @@ export default function DataTable({
   /** key of a boolean field: rows where it is true get the "highlight" class */
   rowClass?: string;
   empty?: string;
+  /** prefills the search box (e.g. from the home page's player search) */
+  initialQuery?: string;
 }) {
   const [sort, setSort] = useState(defaultSort ?? { key: columns[0].key, desc: false });
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(initialQuery);
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();

@@ -73,3 +73,20 @@ export function fmtDate(d?: string | null) {
   const [y, m, day] = d.slice(0, 10).split("-");
   return `${day}.${m}.${y}`;
 }
+
+/** Mirrors match_team_group() in db/schema.sql: old-boys matches are recorded under the 1st team's name. */
+export function matchTeamGroup(clubTeam: string, competition?: string | null) {
+  if (/(Ü ?[0-9]{2}|altliga)/i.test(competition ?? "")) return "ue";
+  if (/7er/i.test(clubTeam)) return "7er";
+  if (/\bIII\b/i.test(clubTeam)) return "3";
+  if (/\bII\b/i.test(clubTeam)) return "2";
+  return "1";
+}
+
+/** Mirrors match_category() in db/schema.sql: league / cup / friendly from a match's competition label. */
+export function matchCategory(competition?: string | null) {
+  const c = competition ?? "";
+  if (/pokal/i.test(c)) return "cup";
+  if (/(FS\/|-FS|freundschaft|turnier|halle)/i.test(c)) return "friendly";
+  return "league";
+}
