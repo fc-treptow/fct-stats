@@ -14,8 +14,10 @@ const COLUMNS: Column[] = [
   { key: "red", label: "Rot", type: "num" },
 ];
 
-export default async function PlayersPage({ searchParams }: { searchParams: Promise<{ all?: string }> }) {
-  const showAll = (await searchParams).all === "1";
+export default async function PlayersPage({ searchParams }: { searchParams: Promise<{ all?: string; q?: string }> }) {
+  const sp = await searchParams;
+  const showAll = sp.all === "1";
+  const query = (sp.q ?? "").trim();
   const rows = await fetchAll((sb) => {
     const q = sb.from("v_player_totals").select("*");
     return showAll ? q : q.gt("appearances", 0);
@@ -36,7 +38,7 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
           </div>
         </div>
       </div>
-      <DataTable columns={COLUMNS} rows={data} defaultSort={{ key: "last_season", desc: true }} search />
+      <DataTable columns={COLUMNS} rows={data} defaultSort={{ key: "last_season", desc: true }} search initialQuery={query} />
     </main>
   );
 }
