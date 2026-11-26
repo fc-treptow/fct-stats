@@ -14,7 +14,6 @@
   --warn-soft: #fdf3e2;
   --danger: #a3151a;
   --danger-soft: #fbe9e9;
-  --serif: "Trajan Pro", "Cinzel", Georgia, "Times New Roman", serif;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--text);
   background: var(--bg);
@@ -23,7 +22,7 @@
 body { margin: 0; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
-h1 { font-size: 1.6rem; margin: 0 0 0.25rem; font-family: var(--serif); letter-spacing: 0.01em; }
+h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
 h2 { font-size: 1.1rem; margin: 1.75rem 0 0.75rem; }
 .muted { color: var(--muted); }
 .small { font-size: 0.85rem; }
@@ -38,10 +37,10 @@ h2 { font-size: 1.1rem; margin: 1.75rem 0 0.75rem; }
   content: ""; position: absolute; left: 0; right: 0; bottom: -5px; height: 5px;
   background: linear-gradient(90deg, var(--club-blue) 0 50%, var(--club-red) 50% 100%);
 }
-.brand { display: flex; align-items: center; gap: 0.6rem; color: #fff; font-family: var(--serif); font-weight: 700; font-size: 1.15rem; letter-spacing: 0.02em; }
+.brand { display: flex; align-items: center; gap: 0.6rem; color: #fff; font-weight: 700; font-size: 1.1rem; }
 .brand:hover { text-decoration: none; }
 .brand img { height: 40px; width: auto; display: block; }
-.brand span { color: #c9cfdd; font-family: ui-sans-serif, system-ui, sans-serif; font-weight: 500; font-size: 0.95rem; letter-spacing: 0; }
+.brand span { color: #c9cfdd; font-weight: 500; }
 .topbar nav { display: flex; gap: 0.1rem; flex-wrap: wrap; flex: 1; font-size: 0.95rem; }
 .topbar nav a { color: #fff; padding: 0.35rem 0.55rem; border-radius: 6px; border-bottom: 2px solid transparent; }
 .topbar nav a:hover { text-decoration: none; background: rgba(255,255,255,0.1); }
@@ -96,7 +95,7 @@ tr.highlight { background: var(--warn-soft); }
 .team-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
 .team-card { display: flex; flex-direction: column; gap: 0.6rem; color: var(--text); border-top: 4px solid var(--club-blue); }
 .team-card:hover { text-decoration: none; border-color: var(--accent); }
-.team-card h2 { margin: 0; color: var(--text); font-family: var(--serif); }
+.team-card h2 { margin: 0; color: var(--text); }
 .team-card-stats { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.85rem; color: var(--muted); }
 .team-card-stats b { color: var(--text); font-size: 1.1rem; margin-right: 0.2rem; }
 .team-card-stats .risk, .team-card-stats .risk b { color: var(--warn); }
