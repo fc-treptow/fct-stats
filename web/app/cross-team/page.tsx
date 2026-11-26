@@ -1,8 +1,9 @@
 import DataTable, { type Column } from "@/components/DataTable";
 import SeasonSelect from "@/components/SeasonSelect";
-import { fetchAll, pickSeason } from "@/lib/data";
+import { NAT_COLUMN, fetchAll, getNationalities, pickSeason, withNationality } from "@/lib/data";
 
 const COLUMNS: Column[] = [
+  NAT_COLUMN,
   { key: "player", label: "Spieler", type: "player" },
   { key: "apps_1", label: "1. Herren", type: "num" },
   { key: "apps_2", label: "2. Herren", type: "num" },
@@ -14,7 +15,10 @@ const COLUMNS: Column[] = [
 
 export default async function CrossTeamPage({ searchParams }: { searchParams: Promise<{ season?: string }> }) {
   const { seasons, season } = await pickSeason((await searchParams).season);
-  const rows = await fetchAll((sb) => sb.from("v_cross_team").select("*").eq("season", season));
+  const [rows, nat] = await Promise.all([
+    fetchAll((sb) => sb.from("v_cross_team").select("*").eq("season", season)),
+    getNationalities(),
+  ]);
   return (
     <main>
       <div className="page-head">
@@ -26,7 +30,7 @@ export default async function CrossTeamPage({ searchParams }: { searchParams: Pr
       </div>
       <DataTable
         columns={COLUMNS}
-        rows={rows.map((r) => ({ ...r, player: "" }))}
+        rows={withNationality(rows, nat).map((r) => ({ ...r, player: "" }))}
         defaultSort={{ key: "apps_total", desc: true }}
         search
         empty="Keine teamübergreifenden Einsätze in dieser Saison."

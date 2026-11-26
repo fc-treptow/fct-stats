@@ -113,3 +113,11 @@ tr.highlight { background: var(--warn-soft); }
   .topbar .user { margin-left: auto; }
   .page { padding: 1.25rem 1rem; }
 }
+
+/* Nationality flags (flag-icons SVGs, 4:3) */
+.flag { display: inline-block; width: 1.2em; height: 0.9em; margin-right: 0.4em; vertical-align: -0.05em;
+  background-size: cover; background-position: center; border-radius: 2px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12); }
+.flag-unknown { background: var(--line); }
+th.flag-col, td.flag-col { width: 1px; padding-right: 0; }
+td.flag-col .flag { margin-right: 0; }
+h1 .flag { width: 1.1em; height: 0.82em; vertical-align: 0; }

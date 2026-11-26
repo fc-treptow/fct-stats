@@ -1,6 +1,6 @@
 import DataTable, { type Column } from "@/components/DataTable";
 import { createClient } from "@/lib/supabase/server";
-import { fmtDate, fullName } from "@/lib/data";
+import { NAT_COLUMN, fmtDate, fullName, getNationalities, withNationality } from "@/lib/data";
 import {
   RULE,
   berlinToday,
@@ -14,6 +14,7 @@ import {
 import CopyMessage from "./CopyMessage";
 
 const FREE_COLUMNS: Column[] = [
+  NAT_COLUMN,
   { key: "player", label: "Spieler", type: "player" },
   { key: "apps_higher", label: "Einsätze 1.", type: "num", title: "Einsätze für die 1. Herren in dieser Saison" },
   { key: "last_higher_fmt", label: "Letzter Einsatz 1.", title: "Letzter Einsatz für die 1. Herren" },
@@ -21,6 +22,7 @@ const FREE_COLUMNS: Column[] = [
 ];
 
 const LOCKED_COLUMNS: Column[] = [
+  NAT_COLUMN,
   { key: "player", label: "Spieler", type: "player" },
   { key: "reason", label: "Eingesetzt in" },
   { key: "apps_higher", label: "Einsätze 1.", type: "num", title: "Einsätze für die 1. Herren in dieser Saison" },
@@ -40,14 +42,15 @@ export default async function EligibilityPage({ searchParams }: { searchParams: 
   const matchDate = isIsoDate(requested) ? requested : nextSunday();
   const sb = await createClient();
 
-  const [countingRes, playersRes, importRes] = await Promise.all([
+  const [countingRes, playersRes, importRes, nat] = await Promise.all([
     sb.rpc("eligibility_counting_matches", { p_higher: RULE.higher, p_date: matchDate }),
     sb.rpc("eligibility", { p_higher: RULE.higher, p_lower: RULE.lower, p_date: matchDate }),
     sb.from("import_runs").select("finished_at").eq("status", "ok").order("finished_at", { ascending: false }).limit(1),
+    getNationalities(),
   ]);
   const error = countingRes.error ?? playersRes.error;
   const counting = ((countingRes.data ?? []) as CountingMatch[]).slice().sort((a, b) => b.kickoff_date.localeCompare(a.kickoff_date));
-  const players = (playersRes.data ?? []) as EligibilityRow[];
+  const players = withNationality((playersRes.data ?? []) as EligibilityRow[], nat);
 
   const lastImport: string | null = importRes.data?.[0]?.finished_at ?? null;
   const lastImportDay = lastImport ? berlinToday(new Date(lastImport)) : null;

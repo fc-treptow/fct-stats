@@ -31,6 +31,9 @@ export const COMPETITION_TYPES: Record<string, string> = {
   "305": "Spielnachmittag",
 };
 
+/** Table column with the player's country flag (rows need `nationality`, see withNationality). */
+export const NAT_COLUMN = { key: "nationality", label: "Nat.", type: "flag", title: "Nationalität" } as const;
+
 type Row = Record<string, any>;
 
 /** Reads all rows of a query, page by page (Supabase returns at most 1000 rows per request). */
@@ -89,4 +92,24 @@ export function matchCategory(competition?: string | null) {
   if (/pokal/i.test(c)) return "cup";
   if (/(FS\/|-FS|freundschaft|turnier|halle)/i.test(c)) return "friendly";
   return "league";
+}
+
+/** Nationality (DFBnet country name) per player, keyed by person id and by every pass number. */
+export async function getNationalities(): Promise<Map<string, string>> {
+  const rows = await fetchAll<{ pass_nr: string; person_id: string | null; nationality: string | null }>((sb) =>
+    sb.from("players").select("pass_nr, person_id, nationality").not("nationality", "is", null),
+  );
+  const out = new Map<string, string>();
+  // The person's own (most recent) pass number wins over older ones.
+  for (const r of rows) if (r.person_id === r.pass_nr || !r.person_id) out.set(r.pass_nr, r.nationality!);
+  for (const r of rows) {
+    if (!out.has(r.pass_nr)) out.set(r.pass_nr, r.nationality!);
+    if (r.person_id && !out.has(r.person_id)) out.set(r.person_id, r.nationality!);
+  }
+  return out;
+}
+
+/** Adds `nationality` to rows that have a pass_nr (rows of other clubs' players stay without). */
+export function withNationality<T extends { pass_nr?: string | null }>(rows: T[], nat: Map<string, string>) {
+  return rows.map((r) => ({ ...r, nationality: (r.pass_nr && nat.get(r.pass_nr)) || null }));
 }

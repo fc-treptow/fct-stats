@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import "flag-icons/css/flag-icons.min.css";
 import "./globals.css";
 import { createClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/auth";

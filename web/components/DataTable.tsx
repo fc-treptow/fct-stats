@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import Flag from "@/components/Flag";
 
 export type Column = {
   key: string;
   label: string;
-  /** player: link to the profile (needs pass_nr in the row); num: right aligned; pct: number + "%" */
-  type?: "text" | "player" | "num" | "pct" | "badge";
+  /** player: link to the profile (needs pass_nr in the row); num: right aligned; pct: number + "%";
+   *  flag: country flag of the row's `nationality` (sorts by country name) */
+  type?: "text" | "player" | "num" | "pct" | "badge" | "flag";
   title?: string;
 };
 
@@ -38,7 +40,7 @@ export default function DataTable({
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const filtered = needle
-      ? rows.filter((r) => `${r.first_name ?? ""} ${r.last_name ?? ""} ${r.name ?? ""}`.toLowerCase().includes(needle))
+      ? rows.filter((r) => `${r.first_name ?? ""} ${r.last_name ?? ""} ${r.name ?? ""} ${r.nationality ?? ""}`.toLowerCase().includes(needle))
       : rows;
     const val = (r: Row) => {
       const c = columns.find((c) => c.key === sort.key);
@@ -67,7 +69,7 @@ export default function DataTable({
               <th
                 key={c.key}
                 title={c.title}
-                className={c.type === "num" || c.type === "pct" ? "num" : ""}
+                className={c.type === "num" || c.type === "pct" ? "num" : c.type === "flag" ? "flag-col" : ""}
                 onClick={() =>
                   setSort((s) => ({ key: c.key, desc: s.key === c.key ? !s.desc : c.type === "num" || c.type === "pct" }))
                 }
@@ -89,8 +91,10 @@ export default function DataTable({
           {shown.map((r, i) => (
             <tr key={i} className={rowClass && r[rowClass] ? "highlight" : ""}>
               {columns.map((c) => (
-                <td key={c.key} className={c.type === "num" || c.type === "pct" ? "num" : ""}>
-                  {c.type === "player" ? (
+                <td key={c.key} className={c.type === "num" || c.type === "pct" ? "num" : c.type === "flag" ? "flag-col" : ""}>
+                  {c.type === "flag" ? (
+                    <Flag nationality={r[c.key]} />
+                  ) : c.type === "player" ? (
                     r.pass_nr ? (
                       <Link href={`/players/${encodeURIComponent(r.pass_nr)}`}>
                         {r.last_name}, {r.first_name}

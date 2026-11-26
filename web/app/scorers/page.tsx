@@ -1,8 +1,9 @@
 import DataTable, { type Column } from "@/components/DataTable";
 import SeasonSelect from "@/components/SeasonSelect";
-import { fetchAll, pickSeason, teamLabel } from "@/lib/data";
+import { NAT_COLUMN, fetchAll, getNationalities, pickSeason, teamLabel, withNationality } from "@/lib/data";
 
 const CLUB_COLUMNS: Column[] = [
+  NAT_COLUMN,
   { key: "player", label: "Spieler", type: "player" },
   { key: "teams", label: "Team(s)" },
   { key: "goals_league", label: "Tore Liga", type: "num" },
@@ -13,6 +14,7 @@ const CLUB_COLUMNS: Column[] = [
 
 const LEAGUE_COLUMNS: Column[] = [
   { key: "league_rank", label: "Platz", type: "num" },
+  NAT_COLUMN,
   { key: "player", label: "Spieler", type: "player" },
   { key: "team", label: "Verein" },
   { key: "goals", label: "Tore", type: "num" },
@@ -20,9 +22,10 @@ const LEAGUE_COLUMNS: Column[] = [
 
 export default async function ScorersPage({ searchParams }: { searchParams: Promise<{ season?: string }> }) {
   const { seasons, season } = await pickSeason((await searchParams).season);
-  const [squad, league] = await Promise.all([
+  const [squad, league, nat] = await Promise.all([
     fetchAll((sb) => sb.from("v_squad").select("*").eq("season", season).gt("goals_all", 0)),
     fetchAll((sb) => sb.from("v_scorers").select("*").eq("season", season).eq("competition_type", "1")),
+    getNationalities(),
   ]);
 
   // Club ranking: one row per player, summed over teams.
@@ -36,7 +39,7 @@ export default async function ScorersPage({ searchParams }: { searchParams: Prom
     p.teams.push(teamLabel(r.team_group));
     byPlayer.set(r.pass_nr, p);
   }
-  const club = [...byPlayer.values()].map((p) => ({
+  const club = withNationality([...byPlayer.values()], nat).map((p) => ({
     ...p,
     player: "",
     teams: [...new Set(p.teams)].join(", "),
@@ -63,7 +66,7 @@ export default async function ScorersPage({ searchParams }: { searchParams: Prom
       <DataTable columns={CLUB_COLUMNS} rows={club} defaultSort={{ key: "goals_all", desc: true }} search empty="Noch keine Tore." />
 
       {ourLeagues.map(([competition, rows]) => {
-        const shown = rows.filter((r) => r.league_rank <= 10 || r.is_ours).map((r) => ({ ...r, player: "" }));
+        const shown = withNationality(rows.filter((r) => r.league_rank <= 10 || r.is_ours), nat).map((r) => ({ ...r, player: "" }));
         return (
           <section key={competition}>
             <h2>{competition.replace("Meisterschaft - ", "")}</h2>
