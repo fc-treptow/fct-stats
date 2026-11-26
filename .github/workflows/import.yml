@@ -2,9 +2,10 @@ name: DFBnet import
 
 on:
   schedule:
-    # Weekly, Monday night: Tue 01:17 UTC = 02:17 Berlin (winter) / 03:17 (summer).
+    # Weekly, night from Sunday to Monday: Mon 01:17 UTC = 02:17 Berlin (winter) / 03:17 (summer),
+    # so the weekend's matches are in before coaches plan the next one.
     # On demand: Actions -> DFBnet import -> Run workflow.
-    - cron: "17 1 * * 2"
+    - cron: "17 1 * * 1"
   workflow_dispatch:
     inputs:
       mode:

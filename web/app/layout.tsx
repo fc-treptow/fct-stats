@@ -31,6 +31,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Link href="/scorers">Torschützen</Link>
               <Link href="/players">Spieler</Link>
               <Link href="/cross-team">Teamübergreifend</Link>
+              <Link href="/eligibility">Einsatzcheck</Link>
               {isAdmin(email) && <Link href="/admin">Import</Link>}
             </nav>
             <form action="/auth/signout" method="post" className="user">

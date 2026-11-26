@@ -23,7 +23,7 @@ export default async function AdminPage() {
   return (
     <main>
       <h1>Import aus DFBnet</h1>
-      <p className="muted">Läuft automatisch jede Woche in der Nacht von Montag auf Dienstag. Hier manuell starten:</p>
+      <p className="muted">Läuft automatisch jede Woche in der Nacht von Sonntag auf Montag. Hier manuell starten:</p>
       <div className="card">
         <ImportButton />
       </div>
