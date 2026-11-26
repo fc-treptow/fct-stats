@@ -1,13 +1,18 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import "./globals.css";
 import { createClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/auth";
 import { TEAMS } from "@/lib/data";
+import NavLinks from "@/components/NavLinks";
 
 export const metadata: Metadata = {
   title: "FC Treptow Statistik",
   robots: { index: false, follow: false },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#000000",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -20,20 +25,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {email && (
           <header className="topbar">
             <Link href="/" className="brand">
+              <img src="/crest.png" alt="" width={38} height={40} />
               FC Treptow <span>Statistik</span>
             </Link>
-            <nav>
-              {TEAMS.slice(0, 3).map((t) => (
-                <Link key={t.key} href={`/team/${t.key}`}>
-                  {t.label}
-                </Link>
-              ))}
-              <Link href="/scorers">Torschützen</Link>
-              <Link href="/players">Spieler</Link>
-              <Link href="/cross-team">Teamübergreifend</Link>
-              <Link href="/eligibility">Einsatzcheck</Link>
-              {isAdmin(email) && <Link href="/admin">Import</Link>}
-            </nav>
+            <NavLinks
+              links={[
+                ...TEAMS.slice(0, 3).map((t) => ({ href: `/team/${t.key}`, label: t.label })),
+                { href: "/scorers", label: "Torschützen" },
+                { href: "/players", label: "Spieler" },
+                { href: "/cross-team", label: "Teamübergreifend" },
+                { href: "/eligibility", label: "Einsatzcheck" },
+                ...(isAdmin(email) ? [{ href: "/admin", label: "Import" }] : []),
+              ]}
+            />
             <form action="/auth/signout" method="post" className="user">
               <span className="muted small">{email}</span>
               <button className="btn btn-small">Abmelden</button>
