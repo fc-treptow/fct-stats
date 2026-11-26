@@ -8,8 +8,8 @@ import { berlinToday, nextSunday, opponent } from "@/lib/eligibility";
 
 const HOME_TEAMS = TEAMS.slice(0, 3);
 const CLUB = /FC Treptow/i;
-// League and cup: yellow cards there lead to bans (every 5th card per competition).
-const COMPETITIVE_TYPES = ["1", "308"];
+// Yellow-card bans (every 5th card) only count in the league (Meisterschaft), not in cup matches.
+const LEAGUE_TYPE = "1";
 
 const BAN_RISK_COLUMNS: Column[] = [
   { key: "player", label: "Spieler", type: "player" },
@@ -55,7 +55,7 @@ export default async function Home() {
         .select("*")
         .eq("season", season)
         .eq("one_more_is_ban", true)
-        .in("competition_type", COMPETITIVE_TYPES)
+        .eq("competition_type", LEAGUE_TYPE)
         .in("team_group", groups)
         .not("pass_nr", "is", null),
     ),
@@ -137,7 +137,7 @@ export default async function Home() {
       </div>
 
       <h2>⚠️ Gelbsperre droht ({banRisk.length})</h2>
-      <p className="muted small">Spieler mit 4, 9, 14 … Gelben Karten in Liga oder Pokal: Die nächste Gelbe bedeutet eine Sperre.</p>
+      <p className="muted small">Spieler mit 4, 9, 14 … Gelben Karten in der Liga: Die nächste Gelbe bedeutet eine Sperre. Pokalspiele werden hier nicht mitgezählt.</p>
       <DataTable
         columns={BAN_RISK_COLUMNS}
         rows={banRisk}
