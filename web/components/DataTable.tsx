@@ -11,6 +11,8 @@ export type Column = {
    *  flag: country flag of the row's `nationality` (sorts by country name) */
   type?: "text" | "player" | "num" | "pct" | "badge" | "flag";
   title?: string;
+  /** row field to sort by instead of `key` (e.g. an ISO date behind a formatted one) */
+  sortKey?: string;
 };
 
 type Row = Record<string, any>;
@@ -21,6 +23,7 @@ export default function DataTable({
   defaultSort,
   search = false,
   rowClass,
+  dimClass,
   empty = "Keine Daten.",
   initialQuery = "",
 }: {
@@ -30,6 +33,8 @@ export default function DataTable({
   search?: boolean;
   /** key of a boolean field: rows where it is true get the "highlight" class */
   rowClass?: string;
+  /** key of a boolean field: rows where it is true get the "dim" class */
+  dimClass?: string;
   empty?: string;
   /** prefills the search box (e.g. from the home page's player search) */
   initialQuery?: string;
@@ -45,7 +50,7 @@ export default function DataTable({
     const val = (r: Row) => {
       const c = columns.find((c) => c.key === sort.key);
       if (c?.type === "player") return `${r.last_name ?? ""} ${r.first_name ?? ""}`.toLowerCase();
-      return r[sort.key];
+      return r[c?.sortKey ?? sort.key];
     };
     return [...filtered].sort((a, b) => {
       const x = val(a), y = val(b);
@@ -89,7 +94,7 @@ export default function DataTable({
             </tr>
           )}
           {shown.map((r, i) => (
-            <tr key={i} className={rowClass && r[rowClass] ? "highlight" : ""}>
+            <tr key={i} className={rowClass && r[rowClass] ? "highlight" : dimClass && r[dimClass] ? "dim" : ""}>
               {columns.map((c) => (
                 <td key={c.key} className={c.type === "num" || c.type === "pct" ? "num" : c.type === "flag" ? "flag-col" : ""}>
                   {c.type === "flag" ? (
