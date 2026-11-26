@@ -449,4 +449,65 @@ select pass_nr, last_name, first_name,
 from v_squad
 group by pass_nr, last_name, first_name;
 
+-- ------------------------------------------------------------------ eligibility (Festspielen)
+-- BFV SpO § 6 Nr. 4 c/d: a player is not eligible for an official match of a lower team if,
+-- in the same season (Spieljahr, from 1 July), he came on in at least one of the last two
+-- official matches (league/cup) that a higher team actually played before that match.
+-- Up to three such players may still be used. Bench only does not count.
+-- Functions run with the caller's rights, so the RLS of the tables applies.
+
+-- '26/27' for any date from 1 July 2026 to 30 June 2027
+create or replace function season_of(d date) returns text
+language sql immutable as $$
+    select lpad((y % 100)::text, 2, '0') || '/' || lpad(((y + 1) % 100)::text, 2, '0')
+    from (select extract(year from d)::int - case when extract(month from d) < 7 then 1 else 0 end as y) s
+$$;
+
+drop function if exists eligibility(text, text, date);
+drop function if exists eligibility_counting_matches(text, date);
+
+-- The higher team's matches that count for a lower-team match on p_date (at most two).
+create function eligibility_counting_matches(p_higher text, p_date date)
+returns table (match_id text, kickoff_date date, competition text, home text, away text)
+language sql stable as $$
+    select m.match_id, m.kickoff_date, m.competition, m.home, m.away
+    from matches m
+    where m.season = season_of(p_date)
+      and m.kickoff_date < p_date
+      and match_team_group(m.club_team, m.competition) = p_higher
+      and match_category(m.competition) in ('league', 'cup')
+    order by m.kickoff_date desc, m.kickoff_time desc nulls last
+    limit 2
+$$;
+
+-- Everyone who played for the higher team this season (before p_date), with:
+-- apps_higher / last_higher: matches for the higher team (all competitions),
+-- apps_lower: official matches for the lower team, locked + locking: the counting matches he played in.
+create function eligibility(p_higher text, p_lower text, p_date date)
+returns table (pass_nr text, first_name text, last_name text, apps_higher int, last_higher date,
+               apps_lower int, locked boolean, locking jsonb)
+language sql stable as $$
+    with played as (
+        select a.person_id, a.match_id, a.minutes_real, m.kickoff_date, m.home, m.away,
+               match_team_group(m.club_team, m.competition) as tg,
+               match_category(m.competition) as cat,
+               a.match_id in (select c.match_id from eligibility_counting_matches(p_higher, p_date) c) as counting
+        from person_matches a
+        join matches m using (match_id)
+        where a.played and m.season = season_of(p_date) and m.kickoff_date < p_date
+    )
+    select pl.pass_nr, pl.first_name, pl.last_name,
+           (count(*) filter (where s.tg = p_higher))::int,
+           max(s.kickoff_date) filter (where s.tg = p_higher),
+           (count(*) filter (where s.tg = p_lower and s.cat <> 'friendly'))::int,
+           bool_or(s.counting),
+           coalesce(jsonb_agg(jsonb_build_object('date', s.kickoff_date, 'home', s.home, 'away', s.away,
+                                                 'minutes', s.minutes_real)
+                              order by s.kickoff_date desc) filter (where s.counting), '[]'::jsonb)
+    from played s
+    join players pl on pl.pass_nr = s.person_id
+    where s.person_id in (select x.person_id from played x where x.tg = p_higher)
+    group by pl.pass_nr, pl.first_name, pl.last_name
+$$;
+
 grant select on all tables in schema public to authenticated;

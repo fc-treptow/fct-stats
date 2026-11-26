@@ -11,8 +11,8 @@ sports director. UI text is German; code, comments and commits are English.
 - `db/schema.sql` – the whole schema: tables, derived tables, RLS, views. Idempotent.
 - `web/` – Next.js 16 app on Vercel (root dir `web`), Supabase auth with Google.
   Uses `proxy.ts` (Next 16 name for middleware). Pages: `team/[group]`, `scorers`,
-  `players`, `players/[pass]`, `cross-team`, `admin`.
-- `.github/workflows/import.yml` – weekly import (Tue 01:17 UTC) + manual
+  `players`, `players/[pass]`, `cross-team`, `eligibility`, `admin`.
+- `.github/workflows/import.yml` – weekly import (Mon 01:17 UTC, night Sun→Mon) + manual
   (`current`, `full`, `reprocess`). `schema.yml` – applies the schema on every push to main.
 
 ## Rules
