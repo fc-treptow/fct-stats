@@ -351,7 +351,8 @@ select
     cardinality(y.card_dates) % 5                               as in_cycle,
     (cardinality(y.card_dates) % 5 = 4)                         as one_more_is_ban,
     y.card_dates[cardinality(y.card_dates)]                     as last_card,
-    y.ban_marks
+    y.ban_marks,
+    y.card_dates                                                -- per-match cards on the player profile
 from yellow_tallies y
 left join competitions c using (fixture_list_id)
 left join v_name_to_player n
