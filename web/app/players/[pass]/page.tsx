@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import DataTable, { type Column } from "@/components/DataTable";
-import { COMPETITION_TYPES, fetchAll, fmtDate, fullName, seasonSortKey, teamLabel } from "@/lib/data";
+import Flag from "@/components/Flag";
+import { COMPETITION_TYPES, fetchAll, fmtDate, fullName, getNationalities, seasonSortKey, teamLabel } from "@/lib/data";
 
 const SEASON_COLUMNS: Column[] = [
   { key: "season", label: "Saison" },
@@ -19,11 +20,12 @@ const SEASON_COLUMNS: Column[] = [
 
 export default async function PlayerPage({ params }: { params: Promise<{ pass: string }> }) {
   const pass = decodeURIComponent((await params).pass);
-  const [seasons, yellow, red, totals] = await Promise.all([
+  const [seasons, yellow, red, totals, nat] = await Promise.all([
     fetchAll((sb) => sb.from("v_squad").select("*").eq("pass_nr", pass)),
     fetchAll((sb) => sb.from("v_yellow_status").select("*").eq("pass_nr", pass)),
     fetchAll((sb) => sb.from("v_red_cards").select("*").eq("pass_nr", pass)),
     fetchAll((sb) => sb.from("v_player_totals").select("pass_numbers").eq("pass_nr", pass)),
+    getNationalities(),
   ]);
   if (seasons.length === 0) {
     // An older pass number of a player: go to the merged profile.
@@ -32,7 +34,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ pass: s
     notFound();
   }
   const passNumbers: string = totals[0]?.pass_numbers ?? pass;
-
+  const nationality = nat.get(pass) ?? null;
 
   const p = seasons[0];
   const active = seasons.filter((r) => r.squad > 0 || r.appearances > 0 || r.goals_all > 0 || r.yellow > 0);
@@ -48,8 +50,12 @@ export default async function PlayerPage({ params }: { params: Promise<{ pass: s
     <main>
       <div className="page-head">
         <div>
-          <h1>{fullName(p)}</h1>
+          <h1>
+            <Flag nationality={nationality} />
+            {fullName(p)}
+          </h1>
           <div className="muted small">
+            {nationality ? `${nationality} · ` : ""}
             {passNumbers.includes(",") ? "Passnummern" : "Passnummer"} {passNumbers} · Saisons {rows[rows.length - 1].season} – {rows[0].season}
           </div>
         </div>

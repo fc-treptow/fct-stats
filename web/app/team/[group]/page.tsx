@@ -1,11 +1,24 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import DataTable, { type Column } from "@/components/DataTable";
+import Flag from "@/components/Flag";
 import FilterTabs from "@/components/FilterTabs";
 import SeasonSelect from "@/components/SeasonSelect";
-import { COMP_FILTERS, TEAMS, fetchAll, fmtDate, fullName, pickCompFilter, pickSeason, teamLabel } from "@/lib/data";
+import {
+  COMP_FILTERS,
+  NAT_COLUMN,
+  TEAMS,
+  fetchAll,
+  fmtDate,
+  fullName,
+  getNationalities,
+  pickCompFilter,
+  pickSeason,
+  teamLabel,
+} from "@/lib/data";
 
 const COLUMNS: Column[] = [
+  NAT_COLUMN,
   { key: "player", label: "Spieler", type: "player" },
   { key: "squad", label: "Kader", type: "num", title: "Auf dem Spielbericht (eingesetzt oder Bank)" },
   { key: "appearances", label: "Einsätze", type: "num" },
@@ -36,7 +49,7 @@ export default async function TeamPage({
   const filter = pickCompFilter(sp.comp);
   const cats = [...filter.categories];
 
-  const [perCat, teamMatches, goals, yellow, red] = await Promise.all([
+  const [perCat, teamMatches, goals, yellow, red, nat] = await Promise.all([
     fetchAll((sb) =>
       sb.from("v_player_season_cat").select("*").eq("season", season).eq("team_group", group).in("category", cats),
     ),
@@ -46,6 +59,7 @@ export default async function TeamPage({
       sb.from("v_yellow_status").select("*").eq("season", season).eq("team_group", group).eq("competition_type", "1"),
     ),
     fetchAll((sb) => sb.from("v_red_cards").select("*").eq("season", season).eq("team_group", group)),
+    getNationalities(),
   ]);
 
   // One row per player, summed over the selected categories.
@@ -53,7 +67,7 @@ export default async function TeamPage({
   for (const r of perCat) {
     const p =
       players.get(r.pass_nr) ??
-      { pass_nr: r.pass_nr, first_name: r.first_name, last_name: r.last_name, player: "", squad: 0, appearances: 0,
+      { pass_nr: r.pass_nr, first_name: r.first_name, last_name: r.last_name, nationality: nat.get(r.pass_nr) ?? null, player: "", squad: 0, appearances: 0,
         starts: 0, subbed_on: 0, subbed_off: 0, minutes: 0, goals: 0, yellow_league: 0, yellow_red: 0, red: 0, ban_risk: false };
     for (const k of ["squad", "appearances", "starts", "subbed_on", "subbed_off", "minutes"]) p[k] += Number(r[k]);
     players.set(r.pass_nr, p);
@@ -122,6 +136,7 @@ export default async function TeamPage({
               <ul>
                 {atRisk.map((y) => (
                   <li key={y.last_name + y.first_name}>
+                    <Flag nationality={y.pass_nr && nat.get(y.pass_nr)} />
                     {y.pass_nr ? <Link href={`/players/${encodeURIComponent(y.pass_nr)}`}>{fullName(y)}</Link> : fullName(y)}{" "}
                     – {y.yellow_cards} Gelbe (letzte am {fmtDate(y.last_card)}) · <span className="muted">{y.competition}</span>
                   </li>
@@ -135,6 +150,7 @@ export default async function TeamPage({
               <ul>
                 {redLeague.map((r, i) => (
                   <li key={i}>
+                    <Flag nationality={r.pass_nr && nat.get(r.pass_nr)} />
                     {r.pass_nr ? <Link href={`/players/${encodeURIComponent(r.pass_nr)}`}>{fullName(r)}</Link> : fullName(r)} –{" "}
                     {r.kind === "R" ? "Rot" : "Gelb-Rot"}
                     {r.matchday ? `, ${r.matchday}. Spieltag` : ""} · <span className="muted">{r.competition}</span>

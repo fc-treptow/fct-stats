@@ -1,7 +1,8 @@
 import DataTable, { type Column } from "@/components/DataTable";
-import { fetchAll, teamLabel } from "@/lib/data";
+import { NAT_COLUMN, fetchAll, getNationalities, teamLabel, withNationality } from "@/lib/data";
 
 const COLUMNS: Column[] = [
+  NAT_COLUMN,
   { key: "player", label: "Spieler", type: "player" },
   { key: "teams", label: "Teams" },
   { key: "first_season", label: "Erste Saison" },
@@ -18,11 +19,14 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
   const sp = await searchParams;
   const showAll = sp.all === "1";
   const query = (sp.q ?? "").trim();
-  const rows = await fetchAll((sb) => {
-    const q = sb.from("v_player_totals").select("*");
-    return showAll ? q : q.gt("appearances", 0);
-  });
-  const data = rows.map((r) => ({
+  const [rows, nat] = await Promise.all([
+    fetchAll((sb) => {
+      const q = sb.from("v_player_totals").select("*");
+      return showAll ? q : q.gt("appearances", 0);
+    }),
+    getNationalities(),
+  ]);
+  const data = withNationality(rows, nat).map((r) => ({
     ...r,
     player: "",
     teams: (r.team_groups ?? "").split(",").filter(Boolean).map(teamLabel).join(", "),

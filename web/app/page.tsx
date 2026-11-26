@@ -1,6 +1,6 @@
 import Link from "next/link";
 import DataTable, { type Column } from "@/components/DataTable";
-import { TEAMS, fetchAll, fmtDate, matchCategory, matchTeamGroup, pickSeason, teamLabel } from "@/lib/data";
+import { NAT_COLUMN, TEAMS, fetchAll, getNationalities, fmtDate, matchCategory, matchTeamGroup, pickSeason, teamLabel, withNationality } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import { berlinToday, nextSunday, opponent } from "@/lib/eligibility";
 
@@ -12,6 +12,7 @@ const CLUB = /FC Treptow/i;
 const LEAGUE_TYPE = "1";
 
 const BAN_RISK_COLUMNS: Column[] = [
+  NAT_COLUMN,
   { key: "player", label: "Spieler", type: "player" },
   { key: "team", label: "Team" },
   { key: "competition", label: "Wettbewerb" },
@@ -20,6 +21,7 @@ const BAN_RISK_COLUMNS: Column[] = [
 ];
 
 const RED_COLUMNS: Column[] = [
+  NAT_COLUMN,
   { key: "player", label: "Spieler", type: "player" },
   { key: "team", label: "Team" },
   { key: "kind_label", label: "Karte" },
@@ -40,7 +42,7 @@ export default async function Home() {
   const groups: string[] = HOME_TEAMS.map((t) => t.key);
   const sb = await createClient();
 
-  const [matches, yellow, red, imports] = await Promise.all([
+  const [matches, yellow, red, imports, nat] = await Promise.all([
     fetchAll<Row>((sb) =>
       sb
         .from("matches")
@@ -61,15 +63,16 @@ export default async function Home() {
     ),
     fetchAll<Row>((sb) => sb.from("v_red_cards").select("*").eq("season", season).in("team_group", groups)),
     sb.from("import_runs").select("finished_at").eq("status", "ok").order("finished_at", { ascending: false }).limit(1),
+    getNationalities(),
   ]);
   const lastImport: string | null = imports.data?.[0]?.finished_at ?? null;
 
   // League yellow exports cover the whole league: keep our players only.
-  const banRisk = yellow
+  const banRisk = withNationality(yellow, nat)
     .filter((y) => CLUB.test(y.team))
     .map((y): Row => ({ ...y, player: "", team: teamLabel(y.team_group), last_card_fmt: fmtDate(y.last_card) }))
     .sort((a, b) => a.team.localeCompare(b.team, "de") || a.last_name.localeCompare(b.last_name, "de"));
-  const reds = red
+  const reds = withNationality(red, nat)
     .filter((r) => CLUB.test(r.team))
     .map((r): Row => ({ ...r, player: "", team: teamLabel(r.team_group), kind_label: r.kind === "R" ? "Rot" : "Gelb-Rot" }));
 
