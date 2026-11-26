@@ -10,6 +10,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return (
     <main className="login">
       <div className="card login-card">
+        <img src="/crest.png" alt="Wappen FC Treptow" width={115} height={120} />
         <h1>FC Treptow Statistik</h1>
         <p className="muted">Einsätze, Karten und Tore aller Teams aus DFBnet.</p>
         {error && <p className="alert">{ERRORS[error] ?? ERRORS.failed}</p>}
